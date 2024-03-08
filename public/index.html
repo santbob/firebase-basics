@@ -9,8 +9,28 @@
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 
       // Add Firebase products that you want to use
-      import { getAuth } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+      import {
+        getAuth,
+        signInWithPopup,
+        GoogleAuthProvider,
+        signOut,
+      } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
+      import {
+        getFirestore,
+        collection,
+        getDocs,
+        addDoc,
+        query,
+        where,
+        orderBy,
+        onSnapshot,
+        serverTimestamp,
+      } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+      import { faker } from "https://esm.sh/@faker-js/faker";
+
+      // alternate setup https://firebase.google.com/docs/web/alt-setup
       // TODO: Add SDKs for Firebase products that you want to use
       // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -27,9 +47,112 @@
       // Initialize Firebase
       const app = initializeApp(firebaseConfig);
 
-      console.log(app);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+
+      const provider = new GoogleAuthProvider();
+
+      const signInButton = document.getElementById("sign-in-btn");
+      const signoutButton = document.getElementById("signout-btn");
+      const userDetails = document.getElementById("user-details");
+      const whenUserSignedOut = document.getElementById("when-signed-out");
+      const whenUserSignedIn = document.getElementById("when-signed-in");
+
+      const createThingsButton = document.getElementById("create-things");
+      const thingsListUl = document.getElementById("things-list");
+      let thingsRef;
+      let unsubscribe;
+
+      signInButton.onclick = () =>
+        signInWithPopup(auth, provider)
+          .then((result) => {
+            // This gives you a Google Access Token. You can use it to access the Google API.
+            const credential = GoogleAuthProvider.credentialFromResult(result);
+            const token = credential.accessToken;
+            // The signed-in user info.
+            const user = result.user;
+            // IdP data available using getAdditionalUserInfo(result)
+            // ...
+          })
+          .catch((error) => {
+            // Handle Errors here.
+            const errorCode = error.code;
+            const errorMessage = error.message;
+            // The email of the user's account used.
+            const email = error.customData.email;
+            // The AuthCredential type that was used.
+            const credential = GoogleAuthProvider.credentialFromError(error);
+            // ...
+          });
+
+      signoutButton.onclick = () =>
+        signOut(auth)
+          .then(() => {})
+          .catch((error) => {
+            // An error happened.
+          });
+
+      auth.onAuthStateChanged((user) => {
+        if (user) {
+          thingsRef = collection(db, "things");
+
+          createThingsButton.onclick = async () => {
+            const data = {
+              uid: user.uid,
+              name: faker.commerce.productName(),
+              createdAt: serverTimestamp(),
+            };
+            const docRef = await addDoc(thingsRef, data);
+            console.log("Document written with ID: ", docRef.id);
+            return;
+          };
+
+          const q = query(
+            thingsRef,
+            where("uid", "==", user.uid),
+            orderBy("createdAt")
+          );
+
+          unsubscribe = onSnapshot(q, (querySnapshot) => {
+            // Map results to an array of li elements
+
+            const items = querySnapshot.docs.map((doc) => {
+              return `<li>${doc.data().name}</li>`;
+            });
+
+            thingsListUl.innerHTML = items.join("");
+          });
+
+          whenUserSignedIn.hidden = false;
+          whenUserSignedOut.hidden = true;
+          userDetails.innerHTML = `<h3>Hello, ${user.displayName}! </h3><p>User ID: ${user.uid} </p>`;
+        } else {
+          unsubscribe && unsubscribe();
+
+          whenUserSignedIn.hidden = true;
+          whenUserSignedOut.hidden = false;
+          userDetails.innerHTML = "";
+        }
+      });
     </script>
     <!-- <script src="./app.js" defer></script> -->
   </head>
-  <body></body>
+  <body>
+    <h1>My Awesome App 🔥</h1>
+
+    <section id="when-signed-out">
+      <button id="sign-in-btn">SignIn with Google</button>
+    </section>
+
+    <section id="when-signed-in" hidden="true">
+      <div id="user-details"></div>
+      <button id="signout-btn">Signout</button>
+    </section>
+
+    <section>
+      <h2>My Firstore Things</h2>
+      <ul id="things-list"></ul>
+      <button id="create-things">Create a Thing</button>
+    </section>
+  </body>
 </html>
